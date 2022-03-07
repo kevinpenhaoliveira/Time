@@ -9,12 +9,11 @@ import { DecimalSource } from "lib/break_eternity";
 import Decimal, { format, formatTime } from "util/bignum";
 import { render } from "util/vue";
 import { computed, toRaw } from "vue";
-import prestige from "./layers/prestige";
 
 export const main = createLayer(() => {
-    const points = createResource<DecimalSource>(10);
-    const best = trackBest(points);
-    const total = trackTotal(points);
+    const time = createResource<DecimalSource>(0, "time");
+    const best = trackBest(time);
+    const total = trackTotal(time);
 
     const pointGain = computed(() => {
         // eslint-disable-next-line prefer-const
@@ -22,25 +21,19 @@ export const main = createLayer(() => {
         return gain;
     });
     globalBus.on("update", diff => {
-        points.value = Decimal.add(points.value, Decimal.times(pointGain.value, diff));
+        time.value = Decimal.add(time.value, Decimal.times(pointGain.value, diff));
     });
-    const oomps = trackOOMPS(points, pointGain);
+    const oomps = trackOOMPS(time, pointGain);
 
-    const tree = createTree(() => ({
-        nodes: [[prestige.treeNode]],
-        branches: [],
-        onReset() {
-            points.value = toRaw(this.resettingNode.value) === toRaw(prestige.treeNode) ? 0 : 10;
-            best.value = points.value;
-            total.value = points.value;
-        },
-        resetPropagation: branchedResetPropagation
-    })) as GenericTree;
+    const taskSpeed = computed(() => {
+        // eslint-disable-next-line prefer-const
+        let speed = new Decimal(1);
+        return speed;
+    });
 
     return {
         id: "main",
         name: "Tree",
-        links: tree.links,
         display: jsx(() => (
             <>
                 <div v-show={player.devSpeed === 0}>Game Paused</div>
@@ -51,27 +44,29 @@ export const main = createLayer(() => {
                     Offline Time: {formatTime(player.offlineTime || 0)}
                 </div>
                 <div>
-                    <span v-show={Decimal.lt(points.value, "1e1000")}>You have </span>
-                    <h2>{format(points.value)}</h2>
-                    <span v-show={Decimal.lt(points.value, "1e1e6")}> points</span>
+                    <span v-show={Decimal.lt(time.value, "1e1000")}>You have saved </span>
+                    <h2>{format(time.value)}</h2>
+                    <span v-show={Decimal.lt(time.value, "1e1e6")}> time</span>
                 </div>
                 <div v-show={Decimal.gt(pointGain.value, 0)}>({oomps.value})</div>
+                <div>
+                    Time is used at a rate of {format(taskSpeed.value)} time/second when performing
+                    tasks
+                </div>
                 <Spacer />
-                {render(tree)}
             </>
         )),
-        points,
+        time,
         best,
         total,
-        oomps,
-        tree
+        oomps
     };
 });
 
 export const getInitialLayers = (
     /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
     player: Partial<PlayerData>
-): Array<GenericLayer> => [main, prestige];
+): Array<GenericLayer> => [main];
 
 export const hasWon = computed(() => {
     return false;
